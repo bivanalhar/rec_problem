@@ -13,54 +13,58 @@ import numpy as np
 import tensorflow as tf
 
 #Step 1 : Preprocessing the data that is to be processed
-database = []
-
-with open("punda_data.csv") as punda:
-	reader = csv.reader(punda, delimiter = ',')
-	for row in reader:
-		database.append(row) #collect all the user-problem information into var "database"
-
-id_data = [i[0] for i in database]
-prob_data = [i[1] for i in database]
-
-num_user = len(set(id_data)) #number of users involved in the app usage
-num_prob = len(set(prob_data)) #number of problems included in the database
 ########### DETAILS WILL BE UPDATED AFTER SPECIFIC INFO ABT DATA IS OBTAINED ##############
 
 #Step 2 : Build up the network architecture
-
 """
-In this network, we assume that the input will consist of number of users, number
-of problems in the database, their interest in solving that problem, and whether they
-have done the problem correctly or not
+Upon building up the network, we assume that the input data will consist of the user ID,
+problem ID, whether the user has attempted that problem or not, whether the user answer the
+problem correctly, and also the timestamp of the attempt (if the user has done one)
 
-[we also keep on the record of whether the student has solved the problem correctly before]
-(not sure if we will collect the type of type of the problems or just the problems itself)
+We plan to build up the machine that recommends user with the problem based on his/her inter-
+action with the application during 2 weeks of his/her usage. We will inspect whether this
+decision is correct or not, then we may change the duration later on
 """
 
-training_epoch = 100
-learning_rate = 1e-3
-batch_size = 256 #will adapt to the number of users and also the number of problems in dataset
-hidden = 30 #number of hidden nodes in the network architecture
-reg_param = 0.1
+#The first part is the problem input's feeding into network (Tensorflow)
+matrix_input = tf.placeholder(tf.float32, [None, num_items])
+attempted_input = tf.placeholder(tf.float32, [None, num_items])
 
-with tf.device("/gpu:0"):
-	weight_user = tf.get_variable("weight_user", shape = [num_user, hidden], initializer = tf.contrib.layers.xavier_initializer())
-	weight_prob = tf.get_variable("weight_prob", shape = [num_prob, hidden], initializer = tf.contrib.layers.xavier_initializer())
-	bias_user = tf.get_variable("bias_user", shape = [num_user], initializer = tf.contrib.layers.xavier_initializer())
-	bias_prob = tf.get_variable("bias_prob", shape = [num_prob], initializer = tf.contrib.layers.xavier_initializer())
+nonzero_input = tf.math.count_nonzero(attempted_input, axis = 0)
 
-	embd_user = tf.nn.embedding_lookup(weight_user, batch_user)
-	embd_prob = tf.nn.embedding_lookup(weight_prob, batch_prob)
+#The second part is to define the parameters to be trained in this AutoEncoder
+w_encoder_1 = tf.get_variable(name = 'w_encoder_1', shape = [num_items, hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+w_encoder_2 = tf.get_variable(name = 'w_encoder_2', shape = [hidden_1, hidden_2], initializer = tf.contrib.layers.xavier_initializer())
 
-	embd_bias_user = tf.nn.embedding_lookup(bias_user, batch_user)
-	embd_bias_prob = tf.nn.embedding_lookup(bias_prob, batch_prob)
+w_decoder_1 = tf.get_variable(name = 'w_decoder_1', shape = [hidden_2, hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+w_decoder_2 = tf.get_variable(name = 'w_decoder_2', shape = [hidden_1, num_items], initializer = tf.contrib.layers.xavier_initializer())
 
-	loss = tf.reduce_sum(tf.multiply(embd_user, embd_item), 1)
-	loss = tf.add(tf.add(loss, bias_user), bias_prob)
-	loss = tf.nn.l2_loss(tf.subtract(loss, rate_batch))
+b_encoder_1 = tf.get_variable(name = 'b_encoder_1', shape = [hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+b_encoder_2 = tf.get_variable(name = 'b_encoder_2', shape = [hidden_2], initializer = tf.contrib.layers.xavier_initializer())
 
-	regularizer = reg_param * tf.add(tf.nn.l2_loss(embd_user), tf.nn.l2_loss(embd_prob))
+b_decoder_1 = tf.get_variable(name = 'b_decoder_1', shape = [hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+b_decoder_2 = tf.get_variable(name = 'b_decoder_2', shape = [num_items], initializer = tf.contrib.layers.xavier_initializer())
 
-	loss = tf.add(loss, regularizer)
-	optimize = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
+#The third part is to define all the operations to be done in this AE
+layer_1 = tf.add(tf.matmul(matrix_input, w_encoder_1), b_encoder_1)
+layer_1 = tf.nn.relu(layer_1)
+
+layer_2 = tf.add(tf.matmul(layer_1, w_encoder_2), b_encoder_2)
+layer_2 = tf.nn.relu(layer_2)
+
+layer_3 = tf.add(tf.matmul(layer_2, w_decoder_1), b_decoder_1)
+layer_3 = tf.nn.relu(layer_3)
+
+matrix_output = tf.add(tf.matmul(layer_3, w_decoder_2), b_decoder_2)
+#this matrix_output is the predicted rating by the user. the real target is the space in which
+#user has attempted the problem (indicated by the value inside the attempted_input)
+
+masked_input = tf.multiply(matrix_input, attempted_input)
+masked_output = tf.multiply(matrix_output, attempted_input)
+masked_diff = tf.div(tf.square(tf.subtract(masked_output, masked_input)), nonzero_input)
+
+masked_mean = tf.reduce_mean(masked_diff)
+loss = masked_mean + reg_param * (tf.nn.l2_loss(w_decoder_1) + tf.nn.l2_loss(w_decoder_2) \
+	tf.nn.l2_loss(w_encoder_1) + tf.nn.l2_loss(w_encoder_2))
+
+optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
