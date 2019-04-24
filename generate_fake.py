@@ -7,38 +7,64 @@ Algorithm.
 import csv
 import random
 
-def fake_sequence(nbr_genres):
-	#to generate the arrays of 0 and 1 with length nbr_genres
-	#such that user has done that genre if the value is 1 and
-	#user has not done that genre if the value is 0
+num_users = 10000 #number of fake users that will be created
 
-	array_result = [0 for i in range(nbr_genres)]
+#Step 1 : Extract the CSV file (the name of the file is info_qfactory_*.csv)
+#Objective = to get the information about possibilities of students to get
+#S, A, B, C, D, respectively
+info_genre = []
+with open("info_qfactory_h1s1.csv") as csv_file:
+	csv_reader = csv.reader(csv_file, delimiter = ",")
+	for row in csv_reader:
+		level_row = row[8:13]
+		level_row = [int(number) + 2 for number in level_row]
 
-	#number_one and number_zero denotes the number of elements 
-	#inside that array_result with the value 1 and 0, respectively
-	percent_one = random.randint(30, 90)
-	number_one = floor(percent_one * nbr_genres / 100)
+		sum_level = sum(level_row)
+		level_row = [int(number / sum_level * 50) for number in level_row]
 
-	#generating the list of randomized integer
-	array_one = random.sample(range(nbr_genres), number_one)
+		info_genre.append(level_row)
 
-	#setting the value of 0 and 1 appropriately
-	for index in array_one:
-		array_result[index] = 1
+num_genre = len(info_genre)
 
-	return array_result
+#Step 2 : deciding on the number of random percentage of genre that user has 
+#done for the particular semester
+random_user = random.choices(range(41), k = 10000)
+for i in range(len(random_user)):
+	random_user[i] += 30
 
-def fake_grade(array_result):
-	#now we are about to produce the grade for each genre that
-	#user has attempted (based on the result on the fake_sequence)
+count_done_user = [int(percent * num_genre / 100) for percent in random_user]
 
-	array_grade = [None for i in range(len(array_result))]
-	for i in range(len(array_result)):
-		if array_result[i] == 1:
-			#TODO : estimating the grade that this user may obtain based on the genre's questions
-			pass
+grade_done_user = []
 
-		else:
-			array_grade[i] = "..."
+for i in range(len(count_done_user)):
+	len_genre = list(range(num_genre))
+	random.shuffle(len_genre)
+	done_user = len_genre[:count_done_user[i]]
+	done_user.sort()
 
-	return array_grade
+	grade_done_user.append(done_user)
+
+grade_user = [["N" for i in range(num_genre)] for j in range(num_users)]
+
+#Step 3 : Deciding on the randomized grade for each of the user
+for i in range(len(grade_done_user)):
+	for j in range(len(grade_done_user[i])):
+		list_5 = info_genre[grade_done_user[i][j]]
+		grade_5 = ["S"] * list_5[0] + ["A"] * list_5[1] + ["B"] * list_5[2] \
+			+ ["C"] * list_5[3] + ["D"] * list_5[4]
+		random.shuffle(grade_5)
+		grade_user[i][grade_done_user[i][j]] = grade_5[0]
+
+#Step 4 : Rewriting into the csv file about the grade achieved
+with open("user_grade_h1s1.csv", mode = 'w') as csv_file:
+	csv_writer = csv.writer(csv_file, delimiter = ",")
+
+	list_elem = ["user_id"]
+	for i in range(num_genre):
+		list_elem.append("Genre #" + str(i + 1))
+	csv_writer.writerow(list_elem)
+
+	for i in range(len(grade_user)):
+		list_elem = ["User #" + str(i + 1)]
+		list_elem = list_elem + grade_user[i]
+		csv_writer.writerow(list_elem)
