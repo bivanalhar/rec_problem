@@ -7,7 +7,7 @@ Algorithm.
 import csv
 import random
 
-num_users = 10000 #number of fake users that will be created
+num_users = 1000000 #number of fake users that will be created
 
 #Step 1 : Extract the CSV file (the name of the file is info_qfactory_*.csv)
 #Objective = to get the information about possibilities of students to get
@@ -28,7 +28,7 @@ num_genre = len(info_genre)
 
 #Step 2 : deciding on the number of random percentage of genre that user has 
 #done for the particular semester
-random_user = random.choices(range(41), k = 10000)
+random_user = [random.choice(range(41)) for i in range(num_users)]
 for i in range(len(random_user)):
 	random_user[i] += 30
 
