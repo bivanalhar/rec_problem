@@ -118,10 +118,9 @@ with tf.device("/gpu:0"):
 	masked_diff = tf.div(tf.square(tf.subtract(masked_output, masked_input)), nonzero_input)
 
 	masked_sum = tf.reduce_sum(masked_diff)
-	loss = masked_sum + reg_param * (tf.nn.l2_loss(w_decoder_1) + tf.nn.l2_loss(w_decoder_2) \
-		+ tf.nn.l2_loss(w_encoder_1) + tf.nn.l2_loss(w_encoder_2))
+	loss = tf.math.sqrt(masked_sum)
 
-	optimizer = tf.train.AdagradOptimizer(learning_rate = learning_rate).minimize(loss)
+	optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
 
 	init_op = tf.global_variables_initializer()
 
@@ -172,7 +171,7 @@ with tf.Session() as sess:
 
 	print("Optimization and Training Finished")
 
-	saver.save(sess, "./model_h1s1_190425.ckpt")
+	saver.save(sess, "./model_h1s1_190425_1e6_data.ckpt")
 	print("Pre-trained Model Saved")
 
 	plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
@@ -181,6 +180,6 @@ with tf.Session() as sess:
 
 	plt.title("Rec System (Deep AE) Training")
 
-	plt.savefig("AE_Training_190425_h1s1.png")
+	plt.savefig("AE_Training_190425_h1s1_1e6_data.png")
 
 	plt.clf()
