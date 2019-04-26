@@ -22,9 +22,9 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('hidden_1', 128, 'The number of nodes in the first hidden layer')
 flags.DEFINE_integer('hidden_2', 64, 'The number of nodes in the second hidden layer')
-flags.DEFINE_boolean('train_mode', True, 'if True, system in training mode. Else, system in testing mode')
-flags.DEFINE_float('learning_rate', 1e-4, 'The learning rate of the network architecture')
-flags.DEFINE_integer('training_epoch', 200, 'The number of training epoch')
+flags.DEFINE_boolean('train_mode', False, 'if True, system in training mode. Else, system in testing mode')
+flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of the network architecture')
+flags.DEFINE_integer('training_epoch', 1000, 'The number of training epoch')
 flags.DEFINE_integer('batchSize', 64, 'Size of one batch for training and testing purpose')
 flags.DEFINE_integer('sample_test', 0, '')
 
@@ -42,6 +42,20 @@ def map_grade(grade):
 	else:
 		return 5.0
 
+def convert_grade(number):
+	if number <= 1.5:
+		return 1.0
+	elif number <= 2.5:
+		return 2.0
+	elif number <= 3.5:
+		return 3.0
+	elif number <= 4.5:
+		return 4.0
+	else:
+		return 5.0
+
+vec_convert = np.vectorize(convert_grade)
+
 input_file = [] #the list of grades user obtained in the respective genres
 attempt_file = [] #the list of whether user has obtained grade in the respective genres
 
@@ -55,7 +69,7 @@ with open("user_grade_h1s1.csv") as csv_file:
 	input_file = input_file[1:]
 	attempt_file = attempt_file[1:]
 
-print("Sample input file (before conversion)\n", input_file[23])
+#print("Sample input file (before conversion)\n", input_file[23])
 
 #at this point, input_file and attempt_file both has the exact same dimensuibn
 for i in range(len(attempt_file)):
@@ -70,7 +84,8 @@ for i in range(len(attempt_file)):
 num_genre = len(input_file[0])
 num_user = 0.01 * len(input_file)
 
-print("Sample input file (after conversion)\n", input_file[23])
+#print("Sample input file (after conversion)\n", input_file[23])
+#print("Sample attempted file\n", attempt_file[23])
 
 train_input, val_input, test_input = input_file[:int(0.7*num_user)], \
 	input_file[int(0.7*num_user):int(0.85*num_user)], input_file[int(0.85*num_user):]
@@ -96,10 +111,9 @@ nonzero_input = tf.math.count_nonzero(attempted_input, axis = 0)
 nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
-learning_rate = 1e-4
+learning_rate = 1e-3
 training_epoch = 100
 batchSize = 64
-reg_param = 0.3
 hidden_1 = 128
 hidden_2 = 64
 
@@ -185,11 +199,12 @@ if FLAGS.train_mode:
 			cost_list.append(total_cost)
 			cost_val_list.append(total_val_loss)
 			
-			print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
+			if epoch % 20 == 19:
+				print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
 		print("Optimization and Training Finished")
 
-		saver.save(sess, "./model_h1s1_190426_1e4_data.ckpt")
+		saver.save(sess, "./model_h1s1_190426_1e4_data_1e3_lr.ckpt")
 		print("Pre-trained Model Saved")
 
 		plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
@@ -198,17 +213,17 @@ if FLAGS.train_mode:
 
 		plt.title("Rec System (Deep AE) Training")
 
-		plt.savefig("AE_Training_190426_h1s1_1e4_data.png")
+		plt.savefig("AE_Training_190426_h1s1_1e4_data_1e3_lr.png")
 
 		plt.clf()
 
 else:
 	with tf.Session() as sess:
-		saver.restore(sess, "model_h1s1_190426_1e4_data.ckpt")
+		saver.restore(sess, "model_h1s1_190426_1e4_data_1e3_lr.ckpt")
 
 		print("Saved Model has been Restored")
 
-		#check on the testing dataset : its RMSE Loss and also its result
+		#check on the testing dataset : its RMSE Loss, its result and overall result analysis
 		no_of_batches_test = int(len(test_input) / FLAGS.batchSize)
 		total_cost_test = 0.
 
@@ -216,18 +231,40 @@ else:
 		ptr = 0
 		for i in range(no_of_batches_test):
 			batch_input = test_input[ptr:ptr+FLAGS.batchSize]
-			batch_attempt = test_input[ptr:ptr+FLAGS.batchSize]
+			batch_attempt = test_attempt[ptr:ptr+FLAGS.batchSize]
 			ptr += FLAGS.batchSize
 
 			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
 			total_cost_test += cost_test / no_of_batches_test
 
-		print("The Test Loss is %.8f" % (total_cost_test))
+		print("The Test Loss is %.8f\n" % (total_cost_test))
 
 		#Second step : Showing one example of the test sample and its result
-		test_sample = test_input[0]
-		test_sample_a = test_attempt[0]
+		test_sample = np.reshape(test_input[15], [1, num_genre])
+		test_sample_a = np.reshape(test_attempt[15], [1, num_genre])
 		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a})
 		
-		print("The sample test is", test_sample)
-		print("The result test is", result_sample)
+		print("Showing one example of the test sample")
+		print("The test sample is\n", test_sample)
+		print("and the result is\n", result_sample)
+
+		#Third step : Counting on the average of the difference after conversion
+		ptr = 0
+		overall_diff = 0.
+		for i in range(no_of_batches_test):
+			batch_input = test_input[ptr:ptr+FLAGS.batchSize]
+			batch_attempt = test_attempt[ptr:ptr+FLAGS.batchSize]
+			ptr += FLAGS.batchSize
+
+			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+			nonzero_count = vec_convert(matrix_test)
+			#for j in range(len(matrix_test)):
+			#	for k in range(len(matrix_test[j])):
+			#		matrix_test[j][k] = convert_grade(matrix_test[j][k])
+			nonzero_count = np.count_nonzero(batch_attempt, axis = 1)
+
+			total_diff_test = np.multiply(np.abs(np.subtract(batch_input, matrix_test)), batch_attempt)
+			avg_diff_test = np.mean(np.divide(np.sum(total_diff_test, axis = 1), nonzero_count))
+			overall_diff += avg_diff_test / no_of_batches_test
+		
+		print("The Overall Difference in Test Data is %.8f" % (overall_diff))
