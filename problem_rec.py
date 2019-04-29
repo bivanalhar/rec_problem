@@ -12,6 +12,7 @@ import csv
 import numpy as np
 import tensorflow as tf
 import matplotlib
+from decimal import Decimal
 
 matplotlib.use('Agg')
 
@@ -22,11 +23,11 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('hidden_1', 128, 'The number of nodes in the first hidden layer')
 flags.DEFINE_integer('hidden_2', 64, 'The number of nodes in the second hidden layer')
-flags.DEFINE_boolean('train_mode', False, 'if True, system in training mode. Else, system in testing mode')
+flags.DEFINE_boolean('train_mode', True, 'if True, system in training mode. Else, system in testing mode')
 flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of the network architecture')
 flags.DEFINE_integer('training_epoch', 1000, 'The number of training epoch')
 flags.DEFINE_integer('batchSize', 64, 'Size of one batch for training and testing purpose')
-flags.DEFINE_integer('sample_test', 0, '')
+flags.DEFINE_integer('sample_test', 0, 'The desired sample test in which the result is to be shown')
 
 def map_grade(grade):
 	if grade == "N":
@@ -82,7 +83,7 @@ for i in range(len(attempt_file)):
 			attempt_file[i][j] = 1.0
 
 num_genre = len(input_file[0])
-num_user = 0.01 * len(input_file)
+num_user = 0.1 * len(input_file)
 
 #print("Sample input file (after conversion)\n", input_file[23])
 #print("Sample attempted file\n", attempt_file[23])
@@ -121,14 +122,14 @@ hidden_2 = 64
 
 #The second part is to define the parameters to be trained in this AutoEncoder
 with tf.device("/gpu:0"):
-	w_encoder_1 = tf.get_variable(name = 'w_encoder_1', shape = [num_genre, FLAGS.hidden_1], initializer = tf.contrib.layers.xavier_initializer())
-	w_encoder_2 = tf.get_variable(name = 'w_encoder_2', shape = [FLAGS.hidden_1, FLAGS.hidden_2], initializer = tf.contrib.layers.xavier_initializer())
-	w_decoder_1 = tf.get_variable(name = 'w_decoder_1', shape = [FLAGS.hidden_2, FLAGS.hidden_1], initializer = tf.contrib.layers.xavier_initializer())
-	w_decoder_2 = tf.get_variable(name = 'w_decoder_2', shape = [FLAGS.hidden_1, num_genre], initializer = tf.contrib.layers.xavier_initializer())
+	w_encoder_1 = tf.get_variable(name = 'w_encoder_1', shape = [num_genre, hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+	w_encoder_2 = tf.get_variable(name = 'w_encoder_2', shape = [hidden_1, hidden_2], initializer = tf.contrib.layers.xavier_initializer())
+	w_decoder_1 = tf.get_variable(name = 'w_decoder_1', shape = [hidden_2, hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+	w_decoder_2 = tf.get_variable(name = 'w_decoder_2', shape = [hidden_1, num_genre], initializer = tf.contrib.layers.xavier_initializer())
 
-	b_encoder_1 = tf.get_variable(name = 'b_encoder_1', shape = [FLAGS.hidden_1], initializer = tf.contrib.layers.xavier_initializer())
-	b_encoder_2 = tf.get_variable(name = 'b_encoder_2', shape = [FLAGS.hidden_2], initializer = tf.contrib.layers.xavier_initializer())
-	b_decoder_1 = tf.get_variable(name = 'b_decoder_1', shape = [FLAGS.hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+	b_encoder_1 = tf.get_variable(name = 'b_encoder_1', shape = [hidden_1], initializer = tf.contrib.layers.xavier_initializer())
+	b_encoder_2 = tf.get_variable(name = 'b_encoder_2', shape = [hidden_2], initializer = tf.contrib.layers.xavier_initializer())
+	b_decoder_1 = tf.get_variable(name = 'b_decoder_1', shape = [hidden_1], initializer = tf.contrib.layers.xavier_initializer())
 	b_decoder_2 = tf.get_variable(name = 'b_decoder_2', shape = [num_genre], initializer = tf.contrib.layers.xavier_initializer())
 
 	#The third part is to define all the operations to be done in this AE
@@ -163,59 +164,65 @@ epoch_list, cost_list, cost_val_list = [], [], []
 
 saver = tf.train.Saver()
 
+epoch_list = [99, 299, 499, 699, 999]
+learning_rate_list = [1e-2, 5e-3, 3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
+batchSize = FLAGS.batchSize
+hidden_1 = FLAGS.hidden_1
+hidden_2 = FLAGS.hidden_2
+
 if FLAGS.train_mode:
-	with tf.Session() as sess:
-		sess.run(init_op)
+	for learning_rate in learning_rate_list:
+		with tf.Session() as sess:
+			sess.run(init_op)
 
-		for epoch in range(FLAGS.training_epoch):
-			total_cost = 0.
-			total_val_loss = 0.
+			for epoch in range(training_epoch):
+				total_cost = 0.
+				total_val_loss = 0.
 
-			no_of_batches = int(len(train_input) / FLAGS.batchSize)
-			no_of_batches_val = int(len(val_input) / FLAGS.batchSize)
+				no_of_batches = int(len(train_input) / batchSize)
+				no_of_batches_val = int(len(val_input) / batchSize)
 
-			#Optimizing the network while also counting on the loss function of training set
-			ptr = 0
-			for i in range(no_of_batches):
-				batch_input = train_input[ptr:ptr+FLAGS.batchSize]
-				batch_attempt = train_attempt[ptr:ptr+FLAGS.batchSize]
-				ptr += FLAGS.batchSize
+				#Optimizing the network while also counting on the loss function of training set
+				ptr = 0
+				for i in range(no_of_batches):
+					batch_input = train_input[ptr:ptr+batchSize]
+					batch_attempt = train_attempt[ptr:ptr+batchSize]
+					ptr += batchSize
 
-				_, cost = sess.run([optimizer, loss], feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
-				total_cost += cost / no_of_batches
+					_, cost = sess.run([optimizer, loss], feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+					total_cost += cost / no_of_batches
 
-			#After the optimization, also count the loss function of validation set
-			ptr = 0
-			for i in range(no_of_batches_val):
-				batch_input = val_input[ptr:ptr+FLAGS.batchSize]
-				batch_attempt = val_attempt[ptr:ptr+FLAGS.batchSize]
-				ptr += FLAGS.batchSize
+				#After the optimization, also count the loss function of validation set
+				ptr = 0
+				for i in range(no_of_batches_val):
+					batch_input = val_input[ptr:ptr+batchSize]
+					batch_attempt = val_attempt[ptr:ptr+batchSize]
+					ptr += batchSize
 
-				cost_val = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
-				total_val_loss += cost_val / no_of_batches_val
+					cost_val = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+					total_val_loss += cost_val / no_of_batches_val
 
-			#Save the value for the loss graph creation
-			epoch_list.append(epoch + 1)
-			cost_list.append(total_cost)
-			cost_val_list.append(total_val_loss)
-			
-			if epoch % 20 == 19:
-				print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
+				#Save the value for the loss graph creation
+				epoch_list.append(epoch + 1)
+				cost_list.append(total_cost)
+				cost_val_list.append(total_val_loss)
+				
+				if epoch % 20 == 19:
+					print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
-		print("Optimization and Training Finished")
+				if epoch in epoch_list:
+					saver.save(sess, "./model_h1s1_1e5_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, Decimal(learning_rate)))
+			print("Optimization and Training Finished")
 
-		saver.save(sess, "./model_h1s1_190426_1e4_data_1e3_lr.ckpt")
-		print("Pre-trained Model Saved")
+			plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
+			plt.xlabel("Epoch")
+			plt.ylabel("Cost Function")
 
-		plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
-		plt.xlabel("Epoch")
-		plt.ylabel("Cost Function")
+			plt.title("Rec System (Deep AE) Training")
 
-		plt.title("Rec System (Deep AE) Training")
+			plt.savefig("AE_Training_h1s1_1e5_data_epoch_%d_lr_%.0e.png" % (epoch + 1, Decimal(learning_rate)))
 
-		plt.savefig("AE_Training_190426_h1s1_1e4_data_1e3_lr.png")
-
-		plt.clf()
+			plt.clf()
 
 else:
 	with tf.Session() as sess:
@@ -224,15 +231,15 @@ else:
 		print("Saved Model has been Restored")
 
 		#check on the testing dataset : its RMSE Loss, its result and overall result analysis
-		no_of_batches_test = int(len(test_input) / FLAGS.batchSize)
+		no_of_batches_test = int(len(test_input) / batchSize)
 		total_cost_test = 0.
 
 		#First step : Calculating the RMSE of the testing dataset
 		ptr = 0
 		for i in range(no_of_batches_test):
-			batch_input = test_input[ptr:ptr+FLAGS.batchSize]
-			batch_attempt = test_attempt[ptr:ptr+FLAGS.batchSize]
-			ptr += FLAGS.batchSize
+			batch_input = test_input[ptr:ptr+batchSize]
+			batch_attempt = test_attempt[ptr:ptr+batchSize]
+			ptr += batchSize
 
 			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
 			total_cost_test += cost_test / no_of_batches_test
@@ -252,9 +259,9 @@ else:
 		ptr = 0
 		overall_diff = 0.
 		for i in range(no_of_batches_test):
-			batch_input = test_input[ptr:ptr+FLAGS.batchSize]
-			batch_attempt = test_attempt[ptr:ptr+FLAGS.batchSize]
-			ptr += FLAGS.batchSize
+			batch_input = test_input[ptr:ptr+batchSize]
+			batch_attempt = test_attempt[ptr:ptr+batchSize]
+			ptr += batchSize
 
 			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
 			nonzero_count = vec_convert(matrix_test)
