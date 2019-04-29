@@ -89,9 +89,9 @@ num_user = 0.1 * len(input_file)
 #print("Sample attempted file\n", attempt_file[23])
 
 train_input, val_input, test_input = input_file[:int(0.7*num_user)], \
-	input_file[int(0.7*num_user):int(0.85*num_user)], input_file[int(0.85*num_user):]
+	input_file[int(0.7*num_user):int(0.85*num_user)], input_file[int(0.85*num_user):int(num_user)]
 train_attempt, val_attempt, test_attempt = attempt_file[:int(0.7*num_user)], \
-	attempt_file[int(0.7*num_user):int(0.85*num_user)], attempt_file[int(0.85*num_user):]
+	attempt_file[int(0.7*num_user):int(0.85*num_user)], attempt_file[int(0.85*num_user):int(num_user)]
 
 #Step 2 : Build up the network architecture
 """
@@ -104,16 +104,20 @@ action with the application during 2 weeks of his/her usage. We will inspect whe
 decision is correct or not, then we may change the duration later on
 """
 
+print("The number of data in Training Dataset is", len(train_input))
+print("The number of data in Validation Dataset is", len(val_input))
+print("The number of data in Testing Dataset is", len(test_input))
+
 #The first part is the problem input's feeding into network (Tensorflow)
 matrix_input = tf.placeholder(tf.float32, [None, num_genre])
 attempted_input = tf.placeholder(tf.float32, [None, num_genre])
 
-nonzero_input = tf.math.count_nonzero(attempted_input, axis = 0)
+nonzero_input = tf.math.count_nonzero(attempted_input, axis = 1)
 nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
 learning_rate = 1e-3
-training_epoch = 100
+training_epoch = 1000
 batchSize = 64
 hidden_1 = 128
 hidden_2 = 64
@@ -148,12 +152,14 @@ with tf.device("/gpu:0"):
 
 	masked_input = tf.multiply(matrix_input, attempted_input)
 	masked_output = tf.multiply(matrix_output, attempted_input)
+	nonzero_input = tf.expand_dims(nonzero_input, axis = 1)
+
 	masked_diff = tf.div(tf.square(tf.subtract(masked_output, masked_input)), nonzero_input)
 
-	masked_sum = tf.reduce_sum(masked_diff)
-	loss = tf.math.sqrt(masked_sum)
+	masked_sum = tf.reduce_sum(masked_diff, axis = 1)
+	loss = tf.reduce_mean(tf.math.sqrt(masked_sum))
 
-	optimizer = tf.train.AdamOptimizer(learning_rate = FLAGS.learning_rate).minimize(loss)
+	optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
 
 	init_op = tf.global_variables_initializer()
 
@@ -164,13 +170,15 @@ epoch_list, cost_list, cost_val_list = [], [], []
 
 saver = tf.train.Saver()
 
-epoch_list = [99, 299, 499, 699, 999]
+epoch_save_list = [99, 199, 399, 599, 799, 999]
 learning_rate_list = [1e-2, 5e-3, 3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
 batchSize = FLAGS.batchSize
 hidden_1 = FLAGS.hidden_1
 hidden_2 = FLAGS.hidden_2
 
 if FLAGS.train_mode:
+	record_file = open("h1s1_1e5_data.txt", "w")
+
 	for learning_rate in learning_rate_list:
 		with tf.Session() as sess:
 			sess.run(init_op)
@@ -210,8 +218,10 @@ if FLAGS.train_mode:
 				if epoch % 20 == 19:
 					print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
-				if epoch in epoch_list:
+				if epoch in epoch_save_list:
+					print("now in Epoch %d, writing into result file" % (epoch + 1))
 					saver.save(sess, "./model_h1s1_1e5_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, Decimal(learning_rate)))
+					record_file.write("Epoch = %5d, Learning Rate = %.0e, Validation Loss = %.8f\n" % (epoch + 1, Decimal(learning_rate), total_val_loss))
 			print("Optimization and Training Finished")
 
 			plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
@@ -223,6 +233,9 @@ if FLAGS.train_mode:
 			plt.savefig("AE_Training_h1s1_1e5_data_epoch_%d_lr_%.0e.png" % (epoch + 1, Decimal(learning_rate)))
 
 			plt.clf()
+
+	#closing the result file for compilation		
+	record_file.close()
 
 else:
 	with tf.Session() as sess:
