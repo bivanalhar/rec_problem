@@ -43,6 +43,12 @@ def map_grade(grade):
 	else:
 		return 5.0
 
+def map_attempt(grade):
+	if grade == "N":
+		return 0.0
+	else:
+		return 1.0
+
 def convert_grade(number):
 	if number <= 1.5:
 		return 1.0
@@ -56,31 +62,31 @@ def convert_grade(number):
 		return 5.0
 
 vec_convert = np.vectorize(convert_grade)
+vec_grade = np.vectorize(map_grade)
+vec_attempt = np.vectorize(map_attempt)
 
 input_file = [] #the list of grades user obtained in the respective genres
 attempt_file = [] #the list of whether user has obtained grade in the respective genres
+user_capable = [] #the list of all user's capability
 
 #Step 1 : Preprocessing the data that is to be processed
 with open("user_grade_h1s1.csv") as csv_file:
 	csv_reader = csv.reader(csv_file, delimiter = ",")
 	for row in csv_reader:
-		input_file.append(row[1:])
-		attempt_file.append(row[1:])
+		user_capable.append(row[1]) #the first data in each row is the user's capability (from 1 to 5)
+		input_file.append(row[2:]) #the rest of the data is the details about user's grade
+		attempt_file.append(row[2:])
 
+	#getting rid of the header existing inside the csv file
+	user_capable = user_capable[1:]
 	input_file = input_file[1:]
 	attempt_file = attempt_file[1:]
 
 #print("Sample input file (before conversion)\n", input_file[23])
 
-#at this point, input_file and attempt_file both has the exact same dimensuibn
-for i in range(len(attempt_file)):
-	for j in range(len(attempt_file[0])):
-		input_file[i][j] = map_grade(input_file[i][j])
-
-		if attempt_file[i][j] == "N":
-			attempt_file[i][j] = 0.0
-		else:
-			attempt_file[i][j] = 1.0
+#at this point, input_file and attempt_file both has the exact same dimension
+input_file = vec_grade(input_file)
+attempt_file = vec_attempt(attempt_file)
 
 num_genre = len(input_file[0])
 num_user = 0.1 * len(input_file)
