@@ -117,7 +117,7 @@ nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
 learning_rate = 1e-3
-training_epoch = 1000
+training_epoch = 200
 batchSize = 64
 hidden_1 = 128
 hidden_2 = 64
@@ -166,11 +166,9 @@ with tf.device("/gpu:0"):
 #The next process is to fetch all the data into its corresponding groups
 #(either training, validation or testing data)
 
-epoch_list, cost_list, cost_val_list = [], [], []
+#epoch_list, cost_list, cost_val_list = [], [], []
 
-saver = tf.train.Saver()
-
-epoch_save_list = [99, 199, 399, 599, 799, 999]
+epoch_save_list = [49, 99, 149, 199]
 learning_rate_list = [1e-2, 5e-3, 3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
 batchSize = FLAGS.batchSize
 hidden_1 = FLAGS.hidden_1
@@ -180,6 +178,9 @@ if FLAGS.train_mode:
 	record_file = open("h1s1_1e5_data.txt", "w")
 
 	for learning_rate in learning_rate_list:
+		epoch_list, cost_list, cost_val_list = [], [], []
+		saver = tf.train.Saver()
+		
 		with tf.Session() as sess:
 			sess.run(init_op)
 
@@ -239,7 +240,8 @@ if FLAGS.train_mode:
 
 else:
 	with tf.Session() as sess:
-		saver.restore(sess, "model_h1s1_190426_1e4_data_1e3_lr.ckpt")
+		saver = tf.train.Saver()
+		saver.restore(sess, "model_h1s1_1e5_data_epoch_200_lr_3e-04.ckpt")
 
 		print("Saved Model has been Restored")
 
@@ -260,8 +262,8 @@ else:
 		print("The Test Loss is %.8f\n" % (total_cost_test))
 
 		#Second step : Showing one example of the test sample and its result
-		test_sample = np.reshape(test_input[15], [1, num_genre])
-		test_sample_a = np.reshape(test_attempt[15], [1, num_genre])
+		test_sample = np.reshape(test_input[27], [1, num_genre])
+		test_sample_a = np.reshape(test_attempt[27], [1, num_genre])
 		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a})
 		
 		print("Showing one example of the test sample")
