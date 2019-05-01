@@ -65,39 +65,40 @@ vec_convert = np.vectorize(convert_grade)
 vec_grade = np.vectorize(map_grade)
 vec_attempt = np.vectorize(map_attempt)
 
-input_file = [] #the list of grades user obtained in the respective genres
-attempt_file = [] #the list of whether user has obtained grade in the respective genres
-user_capable = [] #the list of all user's capability
+input_train, input_val, input_test = [], [], [] #the list of grades user obtained in the respective genres
+attempt_train, attempt_val, attempt_test = [], [], [] #the list of whether user has obtained grade in the respective genres
 
-#Step 1 : Preprocessing the data that is to be processed
-with open("user_grade_h1s1.csv") as csv_file:
+#Step 1 : Preprocessing the train, val and test data
+with open("train_data.csv") as csv_file:
 	csv_reader = csv.reader(csv_file, delimiter = ",")
 	for row in csv_reader:
-		user_capable.append(row[1]) #the first data in each row is the user's capability (from 1 to 5)
-		input_file.append(row[2:]) #the rest of the data is the details about user's grade
-		attempt_file.append(row[2:])
+		input_train.append(row[2:]) #the rest of the data is the details about user's grade
+		attempt_train.append(row[2:])
 
-	#getting rid of the header existing inside the csv file
-	user_capable = user_capable[1:]
-	input_file = input_file[1:]
-	attempt_file = attempt_file[1:]
+with open("val_data.csv") as csv_file:
+	csv_reader = csv.reader(csv_file, delimiter = ",")
+	for row in csv_reader:
+		input_val.append(row[2:])
+		attempt_val.append(row[2:])
+
+with open("test_data.csv") as csv_file:
+	csv_reader = csv.reader(csv_file, delimiter = ",")
+	for row in csv_reader:
+		input_test.append(row[2:])
+		attempt_test.append(row[2:])
 
 #print("Sample input file (before conversion)\n", input_file[23])
 
 #at this point, input_file and attempt_file both has the exact same dimension
-input_file = vec_grade(input_file)
-attempt_file = vec_attempt(attempt_file)
+input_train, input_val, input_test = vec_grade(input_train), \
+	vec_grade(input_val), vec_grade(input_test)
+attempt_train, attempt_val, attempt_test = vec_attempt(attempt_train), \
+	vec_attempt(attempt_val), vec_attempt(attempt_test)
 
-num_genre = len(input_file[0])
-num_user = 0.1 * len(input_file)
+num_genre = len(input_train[0])
 
 #print("Sample input file (after conversion)\n", input_file[23])
 #print("Sample attempted file\n", attempt_file[23])
-
-train_input, val_input, test_input = input_file[:int(0.7*num_user)], \
-	input_file[int(0.7*num_user):int(0.85*num_user)], input_file[int(0.85*num_user):int(num_user)]
-train_attempt, val_attempt, test_attempt = attempt_file[:int(0.7*num_user)], \
-	attempt_file[int(0.7*num_user):int(0.85*num_user)], attempt_file[int(0.85*num_user):int(num_user)]
 
 #Step 2 : Build up the network architecture
 """
@@ -110,15 +111,15 @@ action with the application during 2 weeks of his/her usage. We will inspect whe
 decision is correct or not, then we may change the duration later on
 """
 
-print("The number of data in Training Dataset is", len(train_input))
-print("The number of data in Validation Dataset is", len(val_input))
-print("The number of data in Testing Dataset is", len(test_input))
+print("The number of data in Training Dataset is", len(input_train))
+print("The number of data in Validation Dataset is", len(input_val))
+print("The number of data in Testing Dataset is", len(input_test))
 
 #The first part is the problem input's feeding into network (Tensorflow)
 matrix_input = tf.placeholder(tf.float32, [None, num_genre])
 attempted_input = tf.placeholder(tf.float32, [None, num_genre])
 
-nonzero_input = tf.math.count_nonzero(attempted_input, axis = 1)
+nonzero_input = tf.math.count_nonzero(attempted_input)
 nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
@@ -127,8 +128,6 @@ training_epoch = 200
 batchSize = 64
 hidden_1 = 128
 hidden_2 = 64
-
-# init = lambda shape, dtype: np.random.normal(loc = 0.0, scale = 2.0)
 
 #The second part is to define the parameters to be trained in this AutoEncoder
 with tf.device("/gpu:0"):
@@ -158,12 +157,9 @@ with tf.device("/gpu:0"):
 
 	masked_input = tf.multiply(matrix_input, attempted_input)
 	masked_output = tf.multiply(matrix_output, attempted_input)
-	nonzero_input = tf.expand_dims(nonzero_input, axis = 1)
 
-	masked_diff = tf.div(tf.square(tf.subtract(masked_output, masked_input)), nonzero_input)
-
-	masked_sum = tf.reduce_sum(masked_diff, axis = 1)
-	loss = tf.reduce_mean(tf.math.sqrt(masked_sum))
+	masked_diff = tf.reduce_sum(tf.square(tf.subtract(masked_output, masked_input)))
+	loss = tf.math.sqrt(tf.div(masked_diff, count_nonzero))
 
 	optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
 
@@ -194,14 +190,14 @@ if FLAGS.train_mode:
 				total_cost = 0.
 				total_val_loss = 0.
 
-				no_of_batches = int(len(train_input) / batchSize)
-				no_of_batches_val = int(len(val_input) / batchSize)
+				no_of_batches = int(len(input_train) / batchSize)
+				no_of_batches_val = int(len(input_val) / batchSize)
 
 				#Optimizing the network while also counting on the loss function of training set
 				ptr = 0
 				for i in range(no_of_batches):
-					batch_input = train_input[ptr:ptr+batchSize]
-					batch_attempt = train_attempt[ptr:ptr+batchSize]
+					batch_input = input_train[ptr:ptr+batchSize]
+					batch_attempt = attempt_train[ptr:ptr+batchSize]
 					ptr += batchSize
 
 					_, cost = sess.run([optimizer, loss], feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
@@ -210,8 +206,8 @@ if FLAGS.train_mode:
 				#After the optimization, also count the loss function of validation set
 				ptr = 0
 				for i in range(no_of_batches_val):
-					batch_input = val_input[ptr:ptr+batchSize]
-					batch_attempt = val_attempt[ptr:ptr+batchSize]
+					batch_input = input_val[ptr:ptr+batchSize]
+					batch_attempt = attempt_val[ptr:ptr+batchSize]
 					ptr += batchSize
 
 					cost_val = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
@@ -252,14 +248,14 @@ else:
 		print("Saved Model has been Restored")
 
 		#check on the testing dataset : its RMSE Loss, its result and overall result analysis
-		no_of_batches_test = int(len(test_input) / batchSize)
+		no_of_batches_test = int(len(input_test) / batchSize)
 		total_cost_test = 0.
 
 		#First step : Calculating the RMSE of the testing dataset
 		ptr = 0
 		for i in range(no_of_batches_test):
-			batch_input = test_input[ptr:ptr+batchSize]
-			batch_attempt = test_attempt[ptr:ptr+batchSize]
+			batch_input = input_test[ptr:ptr+batchSize]
+			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
 			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
@@ -280,8 +276,8 @@ else:
 		ptr = 0
 		overall_diff = 0.
 		for i in range(no_of_batches_test):
-			batch_input = test_input[ptr:ptr+batchSize]
-			batch_attempt = test_attempt[ptr:ptr+batchSize]
+			batch_input = input_test[ptr:ptr+batchSize]
+			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
 			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
