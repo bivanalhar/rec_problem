@@ -124,7 +124,7 @@ nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
 learning_rate = 1e-3
-training_epoch = 200
+training_epoch = 1000
 batchSize = 64
 hidden_1 = 128
 hidden_2 = 64
@@ -159,7 +159,7 @@ with tf.device("/gpu:0"):
 	masked_output = tf.multiply(matrix_output, attempted_input)
 
 	masked_diff = tf.reduce_sum(tf.square(tf.subtract(masked_output, masked_input)))
-	loss = tf.math.sqrt(tf.div(masked_diff, count_nonzero))
+	loss = tf.math.sqrt(tf.div(masked_diff, nonzero_input))
 
 	optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(loss)
 
@@ -170,7 +170,7 @@ with tf.device("/gpu:0"):
 
 #epoch_list, cost_list, cost_val_list = [], [], []
 
-epoch_save_list = [49, 99, 149, 199]
+epoch_save_list = [99, 199, 299, 399, 499, 599, 699, 799, 899, 999]
 learning_rate_list = [1e-2, 5e-3, 3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
 batchSize = FLAGS.batchSize
 hidden_1 = FLAGS.hidden_1
@@ -218,12 +218,12 @@ if FLAGS.train_mode:
 				cost_list.append(total_cost)
 				cost_val_list.append(total_val_loss)
 				
-				if epoch % 20 == 19:
+				if epoch % 50 == 49:
 					print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
 				if epoch in epoch_save_list:
 					print("now in Epoch %d, writing into result file" % (epoch + 1))
-					saver.save(sess, "./model_h1s1_1e5_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, Decimal(learning_rate)))
+					saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, Decimal(learning_rate)))
 					record_file.write("Epoch = %5d, Learning Rate = %.0e, Validation Loss = %.8f\n" % (epoch + 1, Decimal(learning_rate), total_val_loss))
 			print("Optimization and Training Finished")
 
@@ -233,7 +233,7 @@ if FLAGS.train_mode:
 
 			plt.title("Rec System (Deep AE) Training")
 
-			plt.savefig("AE_Training_h1s1_1e5_data_epoch_%d_lr_%.0e.png" % (epoch + 1, Decimal(learning_rate)))
+			plt.savefig("AE_Training_h1s1_1e5_new_data_epoch_%d_lr_%.0e.png" % (epoch + 1, Decimal(learning_rate)))
 
 			plt.clf()
 
@@ -243,7 +243,7 @@ if FLAGS.train_mode:
 else:
 	with tf.Session() as sess:
 		saver = tf.train.Saver()
-		saver.restore(sess, "model_h1s1_1e5_data_epoch_200_lr_3e-04.ckpt")
+		saver.restore(sess, "model_h1s1_1e5_new_data_epoch_1000_lr_3e-04.ckpt")
 
 		print("Saved Model has been Restored")
 
@@ -264,8 +264,8 @@ else:
 		print("The Test Loss is %.8f\n" % (total_cost_test))
 
 		#Second step : Showing one example of the test sample and its result
-		test_sample = np.reshape(test_input[27], [1, num_genre])
-		test_sample_a = np.reshape(test_attempt[27], [1, num_genre])
+		test_sample = np.reshape(input_test[1672+5005+263], [1, num_genre])
+		test_sample_a = np.reshape(attempt_test[1672+5005+263], [1, num_genre])
 		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a})
 		
 		print("Showing one example of the test sample")
