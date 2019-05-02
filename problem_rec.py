@@ -12,7 +12,7 @@ import csv
 import numpy as np
 import tensorflow as tf
 import matplotlib
-from decimal import Decimal
+import pickle
 
 matplotlib.use('Agg')
 
@@ -24,10 +24,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer('hidden_1', 128, 'The number of nodes in the first hidden layer')
 flags.DEFINE_integer('hidden_2', 64, 'The number of nodes in the second hidden layer')
 flags.DEFINE_boolean('train_mode', True, 'if True, system in training mode. Else, system in testing mode')
-flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of the network architecture')
-flags.DEFINE_integer('training_epoch', 1000, 'The number of training epoch')
 flags.DEFINE_integer('batchSize', 64, 'Size of one batch for training and testing purpose')
-flags.DEFINE_integer('sample_test', 0, 'The desired sample test in which the result is to be shown')
 
 def map_grade(grade):
 	if grade == "N":
@@ -123,7 +120,7 @@ nonzero_input = tf.math.count_nonzero(attempted_input)
 nonzero_input = tf.cast(nonzero_input, tf.float32)
 
 #Define the hyperparameter for the network architecture
-learning_rate = 1e-3
+learning_rate = tf.placeholder(tf.float32, [])
 training_epoch = 1000
 batchSize = 64
 hidden_1 = 128
@@ -171,15 +168,20 @@ with tf.device("/gpu:0"):
 #epoch_list, cost_list, cost_val_list = [], [], []
 
 epoch_save_list = [99, 199, 299, 399, 499, 599, 699, 799, 899, 999]
-learning_rate_list = [1e-2, 5e-3, 3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
+learning_rate_list = [3e-3, 1e-3, 5e-4, 3e-4, 1e-4]
 batchSize = FLAGS.batchSize
 hidden_1 = FLAGS.hidden_1
 hidden_2 = FLAGS.hidden_2
 
 if FLAGS.train_mode:
-	record_file = open("h1s1_1e5_data.txt", "w")
+	pickle_out = open("epoch_lr.pickle", "wb")
 
-	for learning_rate in learning_rate_list:
+	#to be filled in with the best epoch and learning rate during training session
+	best_loss = None
+	best_epoch = None
+	best_lr = None
+
+	for learn_rate in learning_rate_list:
 		epoch_list, cost_list, cost_val_list = [], [], []
 		saver = tf.train.Saver()
 		
@@ -200,7 +202,7 @@ if FLAGS.train_mode:
 					batch_attempt = attempt_train[ptr:ptr+batchSize]
 					ptr += batchSize
 
-					_, cost = sess.run([optimizer, loss], feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+					_, cost = sess.run([optimizer, loss], feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : learn_rate})
 					total_cost += cost / no_of_batches
 
 				#After the optimization, also count the loss function of validation set
@@ -210,7 +212,7 @@ if FLAGS.train_mode:
 					batch_attempt = attempt_val[ptr:ptr+batchSize]
 					ptr += batchSize
 
-					cost_val = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+					cost_val = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : learn_rate})
 					total_val_loss += cost_val / no_of_batches_val
 
 				#Save the value for the loss graph creation
@@ -222,9 +224,13 @@ if FLAGS.train_mode:
 					print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
 				if epoch in epoch_save_list:
-					print("now in Epoch %d, writing into result file" % (epoch + 1))
-					saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, Decimal(learning_rate)))
-					record_file.write("Epoch = %5d, Learning Rate = %.0e, Validation Loss = %.8f\n" % (epoch + 1, Decimal(learning_rate), total_val_loss))
+					saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, learn_rate))
+					if best_loss == None or best_loss > total_val_loss:
+						best_epoch, best_lr = epoch + 1, learn_rate
+						best_loss = total_val_loss
+						print("The current best loss value is %.8f, achieved with epoch %d and learning rate %.0e" % \
+							(best_loss, best_epoch, best_lr))
+					
 			print("Optimization and Training Finished")
 
 			plt.plot(epoch_list, cost_list, "b", epoch_list, cost_val_list, "r")
@@ -233,17 +239,24 @@ if FLAGS.train_mode:
 
 			plt.title("Rec System (Deep AE) Training")
 
-			plt.savefig("AE_Training_h1s1_1e5_new_data_epoch_%d_lr_%.0e.png" % (epoch + 1, Decimal(learning_rate)))
+			plt.savefig("AE_Training_h1s1_1e5_new_data_epoch_%d_lr_%.0e.png" % (epoch + 1, learn_rate))
 
 			plt.clf()
 
-	#closing the result file for compilation		
-	record_file.close()
+	dump_set = [best_loss, best_epoch, best_lr]
+	pickle.dump(dump_set, pickle_out)
+	pickle_out.close()
 
 else:
+	pickle_in = open("epoch_lr.pickle", "rb")
+	dumped_set = pickle.load(pickle_in)
+	print("The set of best hyperparameter is %d, %.0e" % (dumped_set[1], dumped_set[2]))
+
 	with tf.Session() as sess:
 		saver = tf.train.Saver()
-		saver.restore(sess, "model_h1s1_1e5_new_data_epoch_1000_lr_3e-04.ckpt")
+
+		file_name = "model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (dumped_set[1], dumped_set[2])
+		saver.restore(sess, file_name)
 
 		print("Saved Model has been Restored")
 
@@ -258,19 +271,20 @@ else:
 			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
-			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : dumped_set[2]})
 			total_cost_test += cost_test / no_of_batches_test
 
+		print("The Validation Loss is %.8f" % (dumped_set[0]))
 		print("The Test Loss is %.8f\n" % (total_cost_test))
 
 		#Second step : Showing one example of the test sample and its result
-		test_sample = np.reshape(input_test[1672+5005+263], [1, num_genre])
-		test_sample_a = np.reshape(attempt_test[1672+5005+263], [1, num_genre])
-		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a})
+		test_sample = np.reshape(input_test[1739+2675+263], [1, num_genre])
+		test_sample_a = np.reshape(attempt_test[1739+2675+263], [1, num_genre])
+		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a, learning_rate : dumped_set[2]})
 		
 		print("Showing one example of the test sample")
 		print("The test sample is\n", test_sample)
-		print("and the result is\n", result_sample)
+		print("and the result is\n", vec_convert(result_sample))
 
 		#Third step : Counting on the average of the difference after conversion
 		ptr = 0
@@ -280,7 +294,7 @@ else:
 			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
-			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt})
+			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : dumped_set[2]})
 			nonzero_count = vec_convert(matrix_test)
 			#for j in range(len(matrix_test)):
 			#	for k in range(len(matrix_test[j])):

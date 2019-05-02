@@ -34,8 +34,8 @@ else:
 				data_by_capability[int(row[1]) - 1].append(row)
 
 	train_split = [6500, 10000, 15000, 10000, 6500] # will be decided later
-	val_split = [1739, 5107, 12496, 4888, 1770]
-	test_split = [1739, 5108, 12495, 4888, 1770]
+	val_split = [1739, 2675, 4013, 2676, 1739]
+	test_split = [1739, 2675, 4013, 2676, 1739]
 
 	with open("train_data.csv", mode = 'w') as csv_file:
 		csv_writer = csv.writer(csv_file, delimiter = ',')
