@@ -47,6 +47,12 @@ def map_attempt(grade):
 	else:
 		return 1.0
 
+def map_inverse_attempt(grade):
+	if grade != "N":
+		return 0.0
+	else:
+		return 1.0
+
 def convert_grade(number):
 	if number <= 1.5:
 		return 1.0
@@ -62,6 +68,7 @@ def convert_grade(number):
 vec_convert = np.vectorize(convert_grade)
 vec_grade = np.vectorize(map_grade)
 vec_attempt = np.vectorize(map_attempt)
+vec_inverse = np.vectorize(map_inverse_attempt)
 
 input_train, input_val, input_test = [], [], [] #the list of grades user obtained in the respective genres
 attempt_train, attempt_val, attempt_test = [], [], [] #the list of whether user has obtained grade in the respective genres
@@ -273,7 +280,8 @@ else:
 			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
-			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : dumped_set[2]})
+			cost_test = sess.run(loss, feed_dict = {matrix_input : batch_input, \
+				attempted_input : batch_attempt, learning_rate : dumped_set[2]})
 			total_cost_test += cost_test / no_of_batches_test
 
 		print("The Validation Loss is %.8f" % (dumped_set[0]))
@@ -282,7 +290,8 @@ else:
 		#Second step : Showing one example of the test sample and its result
 		test_sample = np.reshape(input_test[1739+2675+263], [1, num_genre])
 		test_sample_a = np.reshape(attempt_test[1739+2675+263], [1, num_genre])
-		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, attempted_input : test_sample_a, learning_rate : dumped_set[2]})
+		result_sample = sess.run(matrix_output, feed_dict = {matrix_input : test_sample, \
+			attempted_input : test_sample_a, learning_rate : dumped_set[2]})
 		
 		print("Showing one example of the test sample")
 		print("The test sample is\n", test_sample)
@@ -296,15 +305,17 @@ else:
 			batch_attempt = attempt_test[ptr:ptr+batchSize]
 			ptr += batchSize
 
-			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, attempted_input : batch_attempt, learning_rate : dumped_set[2]})
-			nonzero_count = vec_convert(matrix_test)
+			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, \
+				attempted_input : batch_attempt, learning_rate : dumped_set[2]})
+			matrix_test = vec_convert(matrix_test)
 			#for j in range(len(matrix_test)):
 			#	for k in range(len(matrix_test[j])):
 			#		matrix_test[j][k] = convert_grade(matrix_test[j][k])
-			nonzero_count = np.count_nonzero(batch_attempt, axis = 1)
+			nonzero_count = np.float32(np.count_nonzero(batch_attempt))
 
-			total_diff_test = np.multiply(np.abs(np.subtract(batch_input, matrix_test)), batch_attempt)
-			avg_diff_test = np.mean(np.divide(np.sum(total_diff_test, axis = 1), nonzero_count))
+			matrix_square_diff = np.multiply(np.square(np.subtract(matrix_test, batch_input)), batch_attempt)
+			total_square_diff = np.sum(matrix_square_diff)
+			avg_diff_test = np.sqrt(np.divide(total_square_diff, nonzero_count))
 			overall_diff += avg_diff_test / no_of_batches_test
 		
 		print("The Overall Difference in Test Data is %.8f" % (overall_diff))
@@ -316,14 +327,70 @@ else:
 		file_name = "model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (dumped_set[1], dumped_set[2])
 		saver.restore(sess, file_name)
 
-		print("Saved Model has been Restored")
+		print("Saved Model has been Revived")
 
-		test_input, test_attempt = [], []
-		random_genre_count = [random.choice(range(21)) + 60 for i in range(25000)]
-
-		file_test = "test_grade_h1s1_%d.csv" % (FLAGS.test_set)
-		with open(file_test) as csv_file:
+		#first, we need to load the testing file
+		real_input, test_input, test_attempt, test_inverse = [], [], [], []
+		with open("test_grade_h1s1_%d.csv" % (FLAGS.test_set)) as csv_file:
 			csv_reader = csv.reader(csv_file, delimiter = ",")
 			for row in csv_reader:
-				test_input.append(row[2:]) #the rest of the data is the details about user's grade
-				test_attempt.append(row[2:])
+				real_input.append(row[2:])
+
+		for i in range(len(real_input)):
+			#second, we determine the percentage of non-obtained genre
+			random_N_genre = int(num_genre * (random.choice(range(21)) + 70) / 100)
+			list_N_genre = list(range(num_genre))
+			random.shuffle(list_N_genre)
+
+			list_N_genre = list_N_genre[:random_N_genre]
+
+			#third, we designate the grade to each non-obtained genre with N and real grade otherwise
+			list_grade_genre = []
+			for j in range(len(real_input[i])):
+				if j in list_N_genre:
+					list_grade_genre.append("N")
+				else:
+					list_grade_genre.append(real_input[i][j])
+
+			test_input.append(vec_grade(list_grade_genre))
+			test_attempt.append(vec_attempt(list_grade_genre))
+			test_inverse.append(vec_inverse(list_grade_genre))
+
+		real_input = vec_grade(real_input)
+
+		#fourth, we evaluate the dataset properly
+		ptr = 0.
+		overall_diff = 0.
+		no_batches_new_test = int(len(test_input) / batchSize)
+		for i in range(no_batches_new_test):
+			batch_input = test_input[ptr:ptr+batchSize]
+			batch_attempt = test_attempt[ptr:ptr+batchSize]
+			batch_inverse = test_inverse[ptr:ptr+batchSize]
+			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, \
+				attempted_input : batch_attempt, learning_rate : dumped_set[2]})
+
+			matrix_test = vec_convert(matrix_test)
+
+			zero_count = np.float32(np.count_nonzero(batch_inverse))
+
+			matrix_square_diff = np.multiply(np.square(np.subtract(matrix_test, real_input)), batch_inverse)
+			total_square_diff = np.sum(matrix_square_diff)
+			avg_diff_test = np.sqrt(np.divide(total_square_diff, zero_count))
+
+			overall_diff += avg_diff_test / no_batches_new_test
+
+		print("The Overall Difference in Customized Test Data is", overall_diff)
+
+		#last, we show the example of the test data (the real one, the masked one and the converted result one)
+		show_real = real_input[16273]
+		show_input = np.reshape(test_input[16273], [1, num_genre])
+		show_attempt = np.reshape(test_attempt[16273], [1, num_genre])
+
+		show_result = sess.run(matrix_output, feed_dict = {matrix_input : show_input, \
+			attempted_input : show_attempt, learning_rate : dumped_set[2]})
+		show_result = vec_convert(show_result)
+
+		print("Showing one example of the test sample")
+		print("The real test sample is\n", show_real)
+		print("The masked test sample is\n", show_input)
+		print("The converted test result is \n", show_result)
