@@ -9,7 +9,7 @@ import random
 import numpy as np
 import scipy.stats as sp
 
-num_users = 80
+num_users = 100000
 
 #Step 1 : Extract the CSV file
 #The objective here is to get the information about the topic
@@ -160,7 +160,11 @@ for i in range(num_users):
 		fourth_kind_grade()
 
 #Now starting to writing up into the test data file
-with open("test_grade_h1s1.csv", mode = 'w') as csv_file:
+#test_grade_h1s1_1 contains all the user belonging to distribution mentioned in main data
+#test_grade_h1s1_2 contains all the user that has independent distribution between topics
+#test_grade_h1s1_3 contains all the user that has independent distribution between genres
+#test_grade_h1s1_4 contains all the user that is like the third one, but follows Uniform Dist.
+with open("test_grade_h1s1_1.csv", mode = 'w') as csv_file:
 	csv_writer = csv.writer(csv_file, delimiter = ",")
 
 	list_elem = ["user_id", "category"]
@@ -168,7 +172,46 @@ with open("test_grade_h1s1.csv", mode = 'w') as csv_file:
 		list_elem.append("Genre #" + str(i + 1))
 	csv_writer.writerow(list_elem)
 
-	for i in range(len(grade_user)):
+	for i in range(len(grade_user) / 4):
+		list_elem = ["User #" + str(i + 1)]
+		list_elem = list_elem + [cat_user[i]] + grade_user[i]
+		csv_writer.writerow(list_elem)
+
+with open("test_grade_h1s1_2.csv", mode = 'w') as csv_file:
+	csv_writer = csv.writer(csv_file, delimiter = ",")
+
+	list_elem = ["user_id", "category"]
+	for i in range(num_genre):
+		list_elem.append("Genre #" + str(i + 1))
+	csv_writer.writerow(list_elem)
+
+	for i in range(len(grade_user) / 4, len(grade_user) / 2):
+		list_elem = ["User #" + str(i + 1)]
+		list_elem = list_elem + [cat_user[i]] + grade_user[i]
+		csv_writer.writerow(list_elem)
+
+with open("test_grade_h1s1_3.csv", mode = 'w') as csv_file:
+	csv_writer = csv.writer(csv_file, delimiter = ",")
+
+	list_elem = ["user_id", "category"]
+	for i in range(num_genre):
+		list_elem.append("Genre #" + str(i + 1))
+	csv_writer.writerow(list_elem)
+
+	for i in range(len(grade_user) / 2, 3 * len(grade_user) / 4):
+		list_elem = ["User #" + str(i + 1)]
+		list_elem = list_elem + [cat_user[i]] + grade_user[i]
+		csv_writer.writerow(list_elem)
+
+with open("test_grade_h1s1_4.csv", mode = 'w') as csv_file:
+	csv_writer = csv.writer(csv_file, delimiter = ",")
+
+	list_elem = ["user_id", "category"]
+	for i in range(num_genre):
+		list_elem.append("Genre #" + str(i + 1))
+	csv_writer.writerow(list_elem)
+
+	for i in range(3 * len(grade_user) / 4, len(grade_user)):
 		list_elem = ["User #" + str(i + 1)]
 		list_elem = list_elem + [cat_user[i]] + grade_user[i]
 		csv_writer.writerow(list_elem)

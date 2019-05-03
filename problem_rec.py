@@ -25,6 +25,7 @@ flags.DEFINE_integer('hidden_1', 128, 'The number of nodes in the first hidden l
 flags.DEFINE_integer('hidden_2', 64, 'The number of nodes in the second hidden layer')
 flags.DEFINE_boolean('train_mode', True, 'if True, system in training mode. Else, system in testing mode')
 flags.DEFINE_integer('batchSize', 64, 'Size of one batch for training and testing purpose')
+flags.DEFINE_integer('test_set', 1, "Defining the set that is to be tested for the performance evaluation")
 
 def map_grade(grade):
 	if grade == "N":
@@ -224,8 +225,8 @@ if FLAGS.train_mode:
 					print("Finish Epoch# %d with Train Loss %.8f and Val Loss %.8f" % (epoch + 1, total_cost, total_val_loss))
 
 				if epoch in epoch_save_list:
-					saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, learn_rate))
 					if best_loss == None or best_loss > total_val_loss:
+						saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, learn_rate))
 						best_epoch, best_lr = epoch + 1, learn_rate
 						best_loss = total_val_loss
 						print("The current best loss value is %.8f, achieved with epoch %d and learning rate %.0e" % \
@@ -252,6 +253,7 @@ else:
 	dumped_set = pickle.load(pickle_in)
 	print("The set of best hyperparameter is %d, %.0e" % (dumped_set[1], dumped_set[2]))
 
+	#The first phase of the testing session is to test on the splitted test data (from the distribution)
 	with tf.Session() as sess:
 		saver = tf.train.Saver()
 
@@ -306,3 +308,22 @@ else:
 			overall_diff += avg_diff_test / no_of_batches_test
 		
 		print("The Overall Difference in Test Data is %.8f" % (overall_diff))
+
+	#The second phase of the testing session is to test the network from the independent dataset
+	with tf.Session() as sess:
+		saver = tf.train.Saver()
+
+		file_name = "model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (dumped_set[1], dumped_set[2])
+		saver.restore(sess, file_name)
+
+		print("Saved Model has been Restored")
+
+		test_input, test_attempt = [], []
+		random_genre_count = [random.choice(range(21)) + 60 for i in range(25000)]
+
+		file_test = "test_grade_h1s1_%d.csv" % (FLAGS.test_set)
+		with open(file_test) as csv_file:
+			csv_reader = csv.reader(csv_file, delimiter = ",")
+			for row in csv_reader:
+				test_input.append(row[2:]) #the rest of the data is the details about user's grade
+				test_attempt.append(row[2:])
