@@ -74,19 +74,19 @@ input_train, input_val, input_test = [], [], [] #the list of grades user obtaine
 attempt_train, attempt_val, attempt_test = [], [], [] #the list of whether user has obtained grade in the respective genres
 
 #Step 1 : Preprocessing the train, val and test data
-with open("train_data.csv") as csv_file:
+with open("train_data_modified.csv") as csv_file:
 	csv_reader = csv.reader(csv_file, delimiter = ",")
 	for row in csv_reader:
 		input_train.append(row[2:]) #the rest of the data is the details about user's grade
 		attempt_train.append(row[2:])
 
-with open("val_data.csv") as csv_file:
+with open("val_data_modified.csv") as csv_file:
 	csv_reader = csv.reader(csv_file, delimiter = ",")
 	for row in csv_reader:
 		input_val.append(row[2:])
 		attempt_val.append(row[2:])
 
-with open("test_data.csv") as csv_file:
+with open("test_data_modified.csv") as csv_file:
 	csv_reader = csv.reader(csv_file, delimiter = ",")
 	for row in csv_reader:
 		input_test.append(row[2:])
@@ -182,7 +182,7 @@ hidden_1 = FLAGS.hidden_1
 hidden_2 = FLAGS.hidden_2
 
 if FLAGS.train_mode:
-	pickle_out = open("epoch_lr.pickle", "wb")
+	pickle_out = open("epoch_lr_mix.pickle", "wb")
 
 	#to be filled in with the best epoch and learning rate during training session
 	best_loss = None
@@ -233,7 +233,7 @@ if FLAGS.train_mode:
 
 				if epoch in epoch_save_list:
 					if best_loss == None or best_loss > total_val_loss:
-						saver.save(sess, "./model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (epoch + 1, learn_rate))
+						saver.save(sess, "./model_h1s1_1e5_mix_data.ckpt")
 						best_epoch, best_lr = epoch + 1, learn_rate
 						best_loss = total_val_loss
 						print("The current best loss value is %.8f, achieved with epoch %d and learning rate %.0e" % \
@@ -247,16 +247,18 @@ if FLAGS.train_mode:
 
 			plt.title("Rec System (Deep AE) Training")
 
-			plt.savefig("AE_Training_h1s1_1e5_new_data_epoch_%d_lr_%.0e.png" % (epoch + 1, learn_rate))
+			plt.savefig("AE_Training_h1s1_1e5_mix_data_lr_%.0e.png" % (learn_rate))
 
 			plt.clf()
 
 	dump_set = [best_loss, best_epoch, best_lr]
+	print("The best loss for the network is %.8f" % (best_loss))
+	print("The best epoch and learning rate is %d, %.0e" % (best_epoch, best_lr))
 	pickle.dump(dump_set, pickle_out)
 	pickle_out.close()
 
 else:
-	pickle_in = open("epoch_lr.pickle", "rb")
+	pickle_in = open("epoch_lr_mix.pickle", "rb")
 	dumped_set = pickle.load(pickle_in)
 	print("The set of best hyperparameter is %d, %.0e" % (dumped_set[1], dumped_set[2]))
 
@@ -264,7 +266,7 @@ else:
 	with tf.Session() as sess:
 		saver = tf.train.Saver()
 
-		file_name = "model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (dumped_set[1], dumped_set[2])
+		file_name = "model_h1s1_1e5_mix_data.ckpt"
 		saver.restore(sess, file_name)
 
 		print("Saved Model has been Restored")
@@ -324,7 +326,7 @@ else:
 	with tf.Session() as sess:
 		saver = tf.train.Saver()
 
-		file_name = "model_h1s1_1e5_new_data_epoch_%d_lr_%.0e.ckpt" % (dumped_set[1], dumped_set[2])
+		file_name = "model_h1s1_1e5_mix_data.ckpt"
 		saver.restore(sess, file_name)
 
 		print("Saved Model has been Revived")
@@ -359,13 +361,16 @@ else:
 		real_input = vec_grade(real_input)
 
 		#fourth, we evaluate the dataset properly
-		ptr = 0.
+		ptr = 0
 		overall_diff = 0.
 		no_batches_new_test = int(len(test_input) / batchSize)
 		for i in range(no_batches_new_test):
+			batch_real = real_input[ptr:ptr+batchSize]
 			batch_input = test_input[ptr:ptr+batchSize]
 			batch_attempt = test_attempt[ptr:ptr+batchSize]
 			batch_inverse = test_inverse[ptr:ptr+batchSize]
+
+			ptr += batchSize
 			matrix_test = sess.run(matrix_output, feed_dict = {matrix_input : batch_input, \
 				attempted_input : batch_attempt, learning_rate : dumped_set[2]})
 
@@ -373,7 +378,7 @@ else:
 
 			zero_count = np.float32(np.count_nonzero(batch_inverse))
 
-			matrix_square_diff = np.multiply(np.square(np.subtract(matrix_test, real_input)), batch_inverse)
+			matrix_square_diff = np.multiply(np.square(np.subtract(matrix_test, batch_real)), batch_inverse)
 			total_square_diff = np.sum(matrix_square_diff)
 			avg_diff_test = np.sqrt(np.divide(total_square_diff, zero_count))
 
@@ -382,15 +387,21 @@ else:
 		print("The Overall Difference in Customized Test Data is", overall_diff)
 
 		#last, we show the example of the test data (the real one, the masked one and the converted result one)
-		show_real = real_input[16273]
-		show_input = np.reshape(test_input[16273], [1, num_genre])
-		show_attempt = np.reshape(test_attempt[16273], [1, num_genre])
+		show_real = real_input[3425]
+		show_input = np.reshape(test_input[3425], [1, num_genre])
+		show_attempt = np.reshape(test_attempt[3425], [1, num_genre])
+		show_inverse = np.reshape(test_inverse[3425], [1, num_genre])
 
 		show_result = sess.run(matrix_output, feed_dict = {matrix_input : show_input, \
 			attempted_input : show_attempt, learning_rate : dumped_set[2]})
 		show_result = vec_convert(show_result)
+		diff_result = np.multiply(np.abs(np.subtract(show_real, show_result)), show_inverse)
+
+		count_percentage = np.count_nonzero(diff_result) / np.count_nonzero(show_inverse) * 100
 
 		print("Showing one example of the test sample")
 		print("The real test sample is\n", show_real)
 		print("The masked test sample is\n", show_input)
 		print("The converted test result is \n", show_result)
+		print("The difference with real input is \n", diff_result)
+		print("The percentage of nonzero elements is", count_percentage, "percent")

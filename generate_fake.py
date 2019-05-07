@@ -9,7 +9,9 @@ import random
 import numpy as np
 import scipy.stats as sp
 
-num_users = 100000 #number of fake users that will be created
+num_users_1 = 50000 #number of fake users that will be created
+num_users_2 = 25000
+num_users_3 = 25000
 
 #Step 1 : Extract the CSV file
 #The objective here is to get the information about the topic
@@ -26,10 +28,21 @@ num_genre = len(info_genre)
 
 #Step 2 : deciding on the number of random percentage of genre that user has 
 #done for the particular semester
-random_user = [random.choice(range(51)) for i in range(num_users)]
-for i in range(len(random_user)):
-	random_user[i] += 25
+random_user_1 = [random.choice(range(21)) for i in range(num_users_1)]
+random_user_2 = [random.choice(range(41)) for i in range(num_users_2)]
+random_user_3 = [random.choice(range(11)) for i in range(num_users_3)]
 
+for i in range(len(random_user_1)):
+	random_user_1[i] += 10
+for i in range(len(random_user_2)):
+	random_user_2[i] += 31
+for i in range(len(random_user_3)):
+	random_user_3[i] += 71
+
+num_users = num_users_1 + num_users_2 + num_users_3
+
+random_user = random_user_1 + random_user_2 + random_user_3
+random.shuffle(random_user)
 count_done_user = [int(percent * num_genre / 100) for percent in random_user]
 
 grade_done_user = []

@@ -9,7 +9,7 @@ import random
 import numpy as np
 import scipy.stats as sp
 
-num_users = 100000
+num_users = 20000
 
 #Step 1 : Extract the CSV file
 #The objective here is to get the information about the topic
@@ -149,7 +149,12 @@ def fourth_kind_grade():
 
 	grade_user.append(grade_obtained)
 
+list_print = [2000 * i - 1 for i in range(1, 11)]
+
 for i in range(num_users):
+	if i in list_print:
+		print("Now designing User #%d" % (i))
+
 	if i < num_users / 4:
 		first_kind_grade()
 	elif num_users / 4 <= i < num_users / 2:
@@ -172,7 +177,9 @@ with open("test_grade_h1s1_1.csv", mode = 'w') as csv_file:
 		list_elem.append("Genre #" + str(i + 1))
 	csv_writer.writerow(list_elem)
 
-	for i in range(len(grade_user) / 4):
+	for i in range(int(len(grade_user) / 4)):
+		if i % 5000 == 4999:
+			print("First Type Creation Data No# %d" % (i + 1))
 		list_elem = ["User #" + str(i + 1)]
 		list_elem = list_elem + [cat_user[i]] + grade_user[i]
 		csv_writer.writerow(list_elem)
@@ -185,7 +192,9 @@ with open("test_grade_h1s1_2.csv", mode = 'w') as csv_file:
 		list_elem.append("Genre #" + str(i + 1))
 	csv_writer.writerow(list_elem)
 
-	for i in range(len(grade_user) / 4, len(grade_user) / 2):
+	for i in range(int(len(grade_user) / 4), int(len(grade_user) / 2)):
+		if i % 5000 == 4999:
+                        print("Second Type Creation Data No# %d" % (i + 1))
 		list_elem = ["User #" + str(i + 1)]
 		list_elem = list_elem + [cat_user[i]] + grade_user[i]
 		csv_writer.writerow(list_elem)
@@ -198,7 +207,9 @@ with open("test_grade_h1s1_3.csv", mode = 'w') as csv_file:
 		list_elem.append("Genre #" + str(i + 1))
 	csv_writer.writerow(list_elem)
 
-	for i in range(len(grade_user) / 2, 3 * len(grade_user) / 4):
+	for i in range(int(len(grade_user) / 2), int(3 * len(grade_user) / 4)):
+		if i % 5000 == 4999:
+                        print("Third Type Creation Data No# %d" % (i + 1))
 		list_elem = ["User #" + str(i + 1)]
 		list_elem = list_elem + [cat_user[i]] + grade_user[i]
 		csv_writer.writerow(list_elem)
@@ -211,7 +222,9 @@ with open("test_grade_h1s1_4.csv", mode = 'w') as csv_file:
 		list_elem.append("Genre #" + str(i + 1))
 	csv_writer.writerow(list_elem)
 
-	for i in range(3 * len(grade_user) / 4, len(grade_user)):
+	for i in range(int(3 * len(grade_user) / 4), len(grade_user)):
+		if i % 5000 == 4999:
+                        print("Fourth Type Creation Data No# %d" % (i + 1))
 		list_elem = ["User #" + str(i + 1)]
 		list_elem = list_elem + [cat_user[i]] + grade_user[i]
 		csv_writer.writerow(list_elem)
